@@ -1,0 +1,18 @@
+#!/bin/bash
+# runit service script. Install at /etc/service/resenha-bots/run (chmod +x) via
+# an app.yml hook so runit supervises and auto-restarts the orchestrator.
+#
+# `exec 2>&1` + `chpst` matches how Discourse runs its other services.
+
+exec 2>&1
+
+# Survive container rebuilds by keeping the downloaded browser in /shared.
+export PLAYWRIGHT_BROWSERS_PATH=/shared/resenha-bots/ms-playwright
+
+export SITE_URL="https://your-demo-site.example.com"
+export RESENHA_BOTS_API_KEY="REPLACE_WITH_ADMIN_API_KEY"
+export RESENHA_BOTS_API_USERNAME="system"
+export RESENHA_BOTS_AUDIO_DIR="/shared/resenha-bots/audio"
+
+cd /var/www/discourse/plugins/resenha-bots/orchestrator
+exec chpst -u discourse:discourse node index.js

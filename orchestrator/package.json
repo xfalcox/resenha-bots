@@ -1,0 +1,17 @@
+{
+  "name": "resenha-bots-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless Playwright daemon that drives Resenha demo voice bots: join a room, play a looped audio file as the mic, leave, repeat.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "install-browser": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

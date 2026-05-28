@@ -1,0 +1,7 @@
+en:
+  site_settings:
+    resenha_bots_enabled: "Enable the Resenha demo voice-bot orchestrator integration."
+    resenha_bots_config: "JSON array describing each demo voice bot (username, password, room slug, audio_url, and optional active_seconds/idle_seconds). Read by the out-of-process orchestrator daemon."
+    resenha_bots_default_active_seconds: "Default number of seconds a bot stays connected to a room each cycle, when the bot entry does not specify active_seconds."
+    resenha_bots_default_idle_seconds: "Default number of seconds a bot waits between cycles, when the bot entry does not specify idle_seconds."
+    resenha_bots_reconcile_enabled: "Run a Sidekiq job every minute that logs a warning when a configured bot is not present in its room."

@@ -1,0 +1,25 @@
+plugins:
+  resenha_bots_enabled:
+    default: false
+  resenha_bots_config:
+    textarea: true
+    default: "[]"
+    # JSON array of bot definitions read by the orchestrator daemon. Each entry:
+    #   {
+    #     "username": "voice_bot_1",
+    #     "password": "...",
+    #     "room": "watercooler",          # resenha room slug
+    #     "audio_url": "/uploads/.../clip.wav",  # pre-encoded 16-bit PCM WAV
+    #     "active_seconds": 120,           # time spent connected per cycle (optional)
+    #     "idle_seconds": 20               # pause between cycles (optional)
+    #   }
+  resenha_bots_default_active_seconds:
+    default: 120
+    min: 5
+    max: 3600
+  resenha_bots_default_idle_seconds:
+    default: 20
+    min: 0
+    max: 3600
+  resenha_bots_reconcile_enabled:
+    default: true

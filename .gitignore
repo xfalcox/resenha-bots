@@ -1,0 +1,11 @@
+# Node / Playwright orchestrator
+orchestrator/node_modules/
+orchestrator/.playwright/
+ms-playwright/
+
+# Downloaded audio cache (runtime)
+orchestrator/audio/
+
+# Misc
+*.log
+.DS_Store
