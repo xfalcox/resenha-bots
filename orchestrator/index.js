@@ -209,6 +209,10 @@ async function runBot(bot, wavPath) {
       `--use-file-for-fake-audio-capture=${wavPath}`,
       "--use-fake-ui-for-media-stream",
       "--autoplay-policy=no-user-gesture-required",
+      // Emit raw host-IP ICE candidates instead of mDNS ".local" names. Inside a
+      // container there's no mDNS responder, so the obfuscated candidates never
+      // resolve and bot<->bot (same network namespace) can't connect directly.
+      "--disable-features=WebRtcHideLocalIpsWithMdns",
     ],
   });
   activeBrowsers.add(browser);
