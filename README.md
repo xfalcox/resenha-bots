@@ -143,7 +143,7 @@ hooks:
     - exec:
         cmd: |
           set -e
-          su discourse -c 'cd $home/plugins/resenha-bots/orchestrator && pnpm install --prod'
+          su discourse -c 'cd $home/plugins/resenha-bots/orchestrator && pnpm install --prod --ignore-workspace'
           su discourse -c 'cd $home/plugins/resenha-bots/orchestrator && PLAYWRIGHT_BROWSERS_PATH=/shared/resenha-bots/ms-playwright ./node_modules/.bin/playwright install chromium'
     # Register the runit-supervised daemon (auto-restarts on crash):
     - exec:
@@ -176,7 +176,9 @@ sv restart resenha-bots
 
 ```bash
 cd plugins/resenha-bots/orchestrator
-pnpm install
+# --ignore-workspace is required: the plugin lives under Discourse's pnpm
+# workspace root, and without it pnpm tries to install the whole monorepo.
+pnpm install --ignore-workspace
 pnpm exec playwright install chromium
 
 SITE_URL=http://localhost:3000 \
