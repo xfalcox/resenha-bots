@@ -24,6 +24,7 @@ const AUDIO_DIR = process.env.RESENHA_BOTS_AUDIO_DIR || "/shared/resenha-bots/au
 const HEADLESS = process.env.RESENHA_BOTS_HEADLESS !== "false";
 const RESTART_BACKOFF_MS = Number(process.env.RESENHA_BOTS_RESTART_BACKOFF_MS || 15000);
 const CONFIG_RETRY_MS = Number(process.env.RESENHA_BOTS_CONFIG_RETRY_MS || 30000);
+const PARTICIPANT_POLL_MS = Number(process.env.RESENHA_BOTS_PARTICIPANT_POLL_MS || 3000);
 
 let shuttingDown = false;
 const activeBrowsers = new Set();
@@ -180,6 +181,47 @@ async function leaveRoom(page, bot) {
   );
 }
 
+// Active (non-bot) participant ids in the room, read from the sidebar avatars.
+async function participantIds(page, roomId) {
+  return page.evaluate((rid) => {
+    const prefix = `resenha-participant-${rid}-`;
+    return Array.from(
+      document.querySelectorAll(
+        `.sidebar-section-link[data-link-name^="${prefix}"]`
+      )
+    )
+      .map((el) => parseInt(el.dataset.linkName.slice(prefix.length), 10))
+      .filter((n) => Number.isFinite(n));
+  }, roomId);
+}
+
+// Stay connected up to active_seconds, but return "newcomer" early when a new
+// non-bot participant appears — so the bot can recycle and re-offer as the
+// offerer (the negotiation direction that works; see README "Join ordering").
+async function stayConnected(page, bot, botUserIds) {
+  const ignore = new Set([bot.user_id, ...botUserIds]);
+  const baseline = new Set(await participantIds(page, bot.room_id));
+  const until = Date.now() + bot.active_seconds * 1000;
+
+  while (!shuttingDown && Date.now() < until) {
+    await sleep(PARTICIPANT_POLL_MS);
+    let current;
+    try {
+      current = await participantIds(page, bot.room_id);
+    } catch {
+      continue; // mid-navigation / transient
+    }
+    const newcomers = current.filter(
+      (id) => !baseline.has(id) && !ignore.has(id)
+    );
+    if (newcomers.length) {
+      log(bot.username, `listener ${newcomers.join(",")} joined; recycling to re-offer`);
+      return "newcomer";
+    }
+  }
+  return "elapsed";
+}
+
 async function connectionState(page, selector) {
   return page.evaluate((sel) => {
     const el = document.querySelector(sel);
@@ -198,7 +240,7 @@ async function connectionState(page, selector) {
 
 // One bot: own browser, own fake-mic file. Loops until shutdown; throws on
 // failure so the supervisor can relaunch it.
-async function runBot(bot, wavPath) {
+async function runBot(bot, wavPath, botUserIds) {
   const scope = bot.username;
 
   const browser = await chromium.launch({
@@ -242,16 +284,20 @@ async function runBot(bot, wavPath) {
 
     while (!shuttingDown) {
       await joinRoom(page, bot);
-      log(scope, `connected; playing for ${bot.active_seconds}s`);
-      await sleep(bot.active_seconds * 1000);
+      log(scope, `connected; playing for up to ${bot.active_seconds}s`);
+      const reason = await stayConnected(page, bot, botUserIds);
 
       if (shuttingDown) {
         break;
       }
 
       await leaveRoom(page, bot);
-      log(scope, `left; idle for ${bot.idle_seconds}s`);
-      await sleep(bot.idle_seconds * 1000);
+
+      // A listener just joined: recycle almost immediately so they hear the bot
+      // without waiting out the idle gap. Otherwise use the configured idle.
+      const idleMs = reason === "newcomer" ? 1000 : bot.idle_seconds * 1000;
+      log(scope, `left; idle for ${Math.round(idleMs / 1000)}s`);
+      await sleep(idleMs);
     }
   } finally {
     activeBrowsers.delete(browser);
@@ -260,13 +306,13 @@ async function runBot(bot, wavPath) {
 }
 
 // Keep a bot alive across crashes (login failure, browser death, network blips).
-async function superviseBot(bot) {
+async function superviseBot(bot, botUserIds) {
   const scope = bot.username;
 
   while (!shuttingDown) {
     try {
       const wavPath = await ensureAudio(bot.audio_url);
-      await runBot(bot, wavPath);
+      await runBot(bot, wavPath, botUserIds);
     } catch (error) {
       if (shuttingDown) {
         break;
@@ -319,7 +365,8 @@ async function main() {
     }
 
     log("orchestrator", `supervising ${bots.length} bot(s)`);
-    await Promise.all(bots.map((bot) => superviseBot(bot)));
+    const botUserIds = bots.map((b) => b.user_id);
+    await Promise.all(bots.map((bot) => superviseBot(bot, botUserIds)));
   }
 }
 
