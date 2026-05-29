@@ -238,24 +238,6 @@ sv down resenha-bots       # stop all bots
 
 Logs go to the container log (the runit `run` script does `exec 2>&1`).
 
-## Join ordering (why bots recycle when you join)
-
-Resenha's WebRTC negotiation has a glare race: when a peer joins a room that
-already has participants, both sides try to offer at once, and the connection
-only survives reliably in the direction where the **bot is the offerer** (you
-join an empty room and bots offer as they arrive; or a bot reconnects to you).
-If *you* join into already-present bots and your browser is the offerer, the
-negotiation can lose and you hear silence until the 30s ICE timeout heals it.
-
-To work around this without touching resenha core, each bot watches the room's
-participant list while connected and, when a **new non-bot participant** appears,
-recycles immediately (leave → rejoin) so it re-offers as the offerer. The poll
-interval is `RESENHA_BOTS_PARTICIPANT_POLL_MS` (default 3000). Other bots are
-excluded from the trigger so their normal cycling doesn't cause reconnect storms.
-
-The proper fix is in resenha's signaling (make negotiation order deterministic
-so only one side offers); this is the demo-side mitigation.
-
 ## Notes & limits
 
 - Each headless Chrome doing WebRTC encode is real, sustained CPU. A few bots
