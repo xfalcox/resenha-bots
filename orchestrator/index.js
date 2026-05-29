@@ -86,12 +86,56 @@ async function login(page, bot) {
   await page.waitForSelector("#login-account-name", { timeout: 30000 });
   await page.fill("#login-account-name", bot.username);
   await page.fill("#login-account-password", bot.password);
-  await page.click("#login-button");
 
-  // Header avatar appears once authenticated.
-  await page.waitForSelector("#current-user, .header-dropdown-toggle.current-user", {
-    timeout: 30000,
-  });
+  // Capture the auth response so we can report *why* login failed. Discourse
+  // returns HTTP 200 with an error/2FA body for bad credentials, unactivated
+  // accounts, or a required second factor — a 200 is not proof of success.
+  let authResponse;
+  try {
+    [authResponse] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes("/session") && r.request().method() === "POST",
+        { timeout: 30000 }
+      ),
+      page.click("#login-button"),
+    ]);
+  } catch {
+    throw new Error("login form did not submit (no POST /session response)");
+  }
+
+  let body = {};
+  try {
+    body = await authResponse.json();
+  } catch {
+    // non-JSON response (e.g. an HTML error page) — leave body empty
+  }
+  if (body && (body.error || body.failed)) {
+    throw new Error(`login rejected: ${body.error || body.failed}`);
+  }
+
+  // Confirm the session is actually authenticated. /session/current.json
+  // returns 200 only when logged in (404 when anon) — a version-stable signal,
+  // unlike header selectors which change between Discourse releases.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let status = 0;
+    try {
+      status = await page.evaluate(async () => {
+        const res = await fetch("/session/current.json", {
+          headers: { Accept: "application/json" },
+        });
+        return res.status;
+      });
+    } catch {
+      // page may be mid-navigation right after login; retry
+    }
+    if (status === 200) {
+      return;
+    }
+    await sleep(1000);
+  }
+  throw new Error(
+    "authenticated session not established after login (2FA enabled, or account not active?)"
+  );
 }
 
 function roomLinkSelector(roomId) {
@@ -173,8 +217,22 @@ async function runBot(bot, wavPath) {
     const context = await browser.newContext();
     const page = await context.newPage();
 
+    // Surface browser-side detail in the daemon log: warnings/errors and the
+    // resenha client's own "[resenha] ..." breadcrumbs (mic, signaling, join).
+    page.on("console", (msg) => {
+      const type = msg.type();
+      const text = msg.text();
+      if (type === "error" || type === "warning" || text.includes("[resenha")) {
+        log(scope, `page ${type}: ${text}`);
+      }
+    });
+    page.on("pageerror", (error) => log(scope, `page error: ${error.message}`));
+
     log(scope, "logging in");
     await login(page, bot);
+
+    // Land on the homepage so the resenha sidebar (and its room links) render.
+    await page.goto(SITE_URL, { waitUntil: "domcontentloaded" });
 
     log(scope, `joining room ${bot.room_slug} (id=${bot.room_id})`);
 
