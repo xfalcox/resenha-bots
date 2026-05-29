@@ -139,6 +139,9 @@ hooks:
             libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 libatspi2.0-0
           mkdir -p /shared/resenha-bots/ms-playwright /shared/resenha-bots/audio
           chown -R discourse:discourse /shared/resenha-bots
+          # The plugin is cloned as root during build; let the discourse user
+          # write node_modules + the lockfile into the orchestrator dir.
+          chown -R discourse:discourse $home/plugins/resenha-bots/orchestrator
     # Install JS deps + browser as the discourse user, into /shared:
     - exec:
         cmd: |
