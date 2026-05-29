@@ -128,26 +128,30 @@ Add to your container's `app.yml`:
 ```yaml
 hooks:
   after_code:
+    # System libraries Chromium needs (root, at build time):
     - exec:
-        cd: $home/plugins/resenha-bots/orchestrator
-        cmd:
-          # System libraries Chromium needs (root, at build time):
-          - "apt-get update && apt-get install -y --no-install-recommends \
-             libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-             libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
-             libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 libatspi2.0-0"
-          # Install deps + browser as the discourse user, into /shared:
-          - "mkdir -p /shared/resenha-bots/ms-playwright /shared/resenha-bots/audio"
-          - "chown -R discourse:discourse /shared/resenha-bots"
-          - "su discourse -c 'cd $home/plugins/resenha-bots/orchestrator && pnpm install --prod'"
-          - "su discourse -c 'PLAYWRIGHT_BROWSERS_PATH=/shared/resenha-bots/ms-playwright \
-             $home/plugins/resenha-bots/orchestrator/node_modules/.bin/playwright install chromium'"
+        cmd: |
+          set -e
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
+            libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 libatspi2.0-0
+          mkdir -p /shared/resenha-bots/ms-playwright /shared/resenha-bots/audio
+          chown -R discourse:discourse /shared/resenha-bots
+    # Install JS deps + browser as the discourse user, into /shared:
     - exec:
-        # Register the runit-supervised daemon (auto-restarts on crash):
-        cmd:
-          - "mkdir -p /etc/service/resenha-bots"
-          - "cp $home/plugins/resenha-bots/orchestrator/resenha-bots.runit.sample /etc/service/resenha-bots/run"
-          - "chmod +x /etc/service/resenha-bots/run"
+        cmd: |
+          set -e
+          su discourse -c 'cd $home/plugins/resenha-bots/orchestrator && pnpm install --prod'
+          su discourse -c 'cd $home/plugins/resenha-bots/orchestrator && PLAYWRIGHT_BROWSERS_PATH=/shared/resenha-bots/ms-playwright ./node_modules/.bin/playwright install chromium'
+    # Register the runit-supervised daemon (auto-restarts on crash):
+    - exec:
+        cmd: |
+          set -e
+          mkdir -p /etc/service/resenha-bots
+          cp $home/plugins/resenha-bots/orchestrator/resenha-bots.runit.sample /etc/service/resenha-bots/run
+          chmod +x /etc/service/resenha-bots/run
 ```
 
 Then, before the first run:
