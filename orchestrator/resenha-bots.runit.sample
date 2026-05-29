@@ -1,18 +1,23 @@
 #!/bin/bash
-# runit service script. Install at /etc/service/resenha-bots/run (chmod +x) via
-# an app.yml hook so runit supervises and auto-restarts the orchestrator.
+# runit service script. Copied to /etc/service/resenha-bots/run by an app.yml
+# hook so runit supervises and auto-restarts the orchestrator.
 #
-# `exec 2>&1` + `chpst` matches how Discourse runs its other services.
+# Secrets / site config are NOT set here — they come from the container
+# environment, which you set in the app.yml `env:` block (persists across
+# rebuilds, unlike editing this file in place). The daemon reads:
+#   SITE_URL                   e.g. https://your-demo-site.example.com
+#   RESENHA_BOTS_API_KEY       an admin API key
+#   RESENHA_BOTS_API_USERNAME  defaults to "system" if unset
+#
+# `exec 2>&1` routes logs to the container log; `chpst -u` runs as the discourse
+# user while preserving the inherited environment (so the env: vars pass through).
 
 exec 2>&1
 
-# Survive container rebuilds by keeping the downloaded browser in /shared.
+# Fixed paths — safe to hardcode. Keep the browser + audio cache in /shared so
+# they survive container rebuilds.
 export PLAYWRIGHT_BROWSERS_PATH=/shared/resenha-bots/ms-playwright
-
-export SITE_URL="https://your-demo-site.example.com"
-export RESENHA_BOTS_API_KEY="REPLACE_WITH_ADMIN_API_KEY"
-export RESENHA_BOTS_API_USERNAME="system"
-export RESENHA_BOTS_AUDIO_DIR="/shared/resenha-bots/audio"
+export RESENHA_BOTS_AUDIO_DIR=/shared/resenha-bots/audio
 
 cd /var/www/discourse/plugins/resenha-bots/orchestrator
 exec chpst -u discourse:discourse node index.js

@@ -123,7 +123,22 @@ Chromium is **not** in the Discourse image and its system libraries need root at
 The mutable bits (browser binary, audio cache) live in `/shared` so they survive
 `./launcher rebuild app`.
 
-Add to your container's `app.yml`:
+First, set the daemon's site URL and admin API key in your `app.yml` `env:`
+block. The runit service reads these from the container environment (they
+persist across rebuilds — don't hardcode them in the run script):
+
+```yaml
+env:
+  # ... your existing DISCOURSE_* vars ...
+  SITE_URL: "https://your-demo-site.example.com"
+  RESENHA_BOTS_API_KEY: "your-admin-api-key"      # Admin → API → new key (all users / system)
+  RESENHA_BOTS_API_USERNAME: "system"
+```
+
+These are plain container env vars (no `DISCOURSE_` prefix), so Discourse won't
+treat them as site settings — they're just passed through to the daemon.
+
+Then add the install + service hooks:
 
 ```yaml
 hooks:
@@ -159,14 +174,17 @@ hooks:
 
 Then, before the first run:
 
-1. Create the bot users and add them to `resenha_allowed_groups`.
-2. Upload the WAV clips; copy each upload URL into `resenha_bots_config`.
-3. Set `resenha_turn_servers` / `resenha_turn_username` / `resenha_turn_credential`
+1. Create an **admin API key** (Admin → API) and set `SITE_URL` +
+   `RESENHA_BOTS_API_KEY` in the `app.yml` `env:` block shown above.
+2. Create the bot users and add them to `resenha_allowed_groups`.
+3. Upload the WAV clips; copy each upload URL into `resenha_bots_config`.
+4. Set `resenha_turn_servers` / `resenha_turn_username` / `resenha_turn_credential`
    (see [Connectivity / TURN](#connectivity--turn-read-this-before-going-public)).
-4. Create an **admin API key** (Admin → API) and put it, plus your site URL,
-   into `/etc/service/resenha-bots/run` (edit the `.runit.sample` values first,
-   or template them).
 5. Set `resenha_bots_enabled` to true.
+
+Changes to the `env:` block take effect on the next `./launcher rebuild app`.
+(The site settings in steps 3–5 are live and need no rebuild — just
+`sv restart resenha-bots` to make the daemon re-read its roster.)
 
 The daemon reads its roster **once at startup**. After changing
 `resenha_bots_config`, reload it with:
